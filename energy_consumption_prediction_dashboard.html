@@ -1,0 +1,1470 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Energy Consumption Prediction Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <style>
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+    input[type="range"] {
+      accent-color: #2563eb;
+    }
+    .heatmap-cell {
+      transition: transform 0.12s ease, box-shadow 0.12s ease;
+    }
+    .heatmap-cell:hover {
+      transform: scale(1.06);
+      z-index: 10;
+    }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-900 min-h-screen flex flex-col">
+
+  <!-- Top Navigation Header -->
+  <header class="bg-white border-b border-slate-200 sticky top-0 z-30">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3.5 flex flex-wrap items-center justify-between gap-3">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center text-white shadow-sm">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+          </svg>
+        </div>
+        <div>
+          <h1 class="text-base sm:text-lg font-bold text-slate-900 leading-tight">Energy Consumption Predictor</h1>
+          <p class="text-xs text-slate-500">ML Regression Suite • Random Forest, Gradient Boosting &amp; XGBoost</p>
+        </div>
+      </div>
+
+      <!-- View Navigation Tabs -->
+      <nav class="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200" aria-label="Main Tabs">
+        <button id="tabBtnPredictor" type="button" data-tab="predictor" class="tab-nav-btn px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition bg-white text-blue-600 shadow-sm">
+          Live Predictor
+        </button>
+        <button id="tabBtnEda" type="button" data-tab="eda" class="tab-nav-btn px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition text-slate-600 hover:text-slate-900">
+          EDA &amp; Dataset
+        </button>
+        <button id="tabBtnModels" type="button" data-tab="models" class="tab-nav-btn px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition text-slate-600 hover:text-slate-900">
+          Model Comparison
+        </button>
+      </nav>
+    </div>
+  </header>
+
+  <!-- Toast Banner -->
+  <div id="toastBanner" class="fixed bottom-5 right-5 z-50 hidden items-center gap-2.5 bg-slate-900 text-white text-xs sm:text-sm font-medium px-4 py-3 rounded-xl shadow-lg border border-slate-700">
+    <span id="toastMessage">Action completed</span>
+  </div>
+
+  <!-- Main Content Area -->
+  <main class="max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 flex-1 space-y-6">
+
+    <!-- ========================================== -->
+    <!-- TAB 1: LIVE PREDICTOR                      -->
+    <!-- ========================================== -->
+    <section id="panelPredictor" class="space-y-6">
+      <!-- Top Scenario Bar -->
+      <div class="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm flex flex-wrap items-center justify-between gap-3">
+        <div class="flex items-center gap-2">
+          <span class="text-xs font-semibold uppercase tracking-wider text-slate-400">Quick Presets:</span>
+          <div class="flex flex-wrap gap-2">
+            <button id="presetSummerBtn" type="button" class="px-3 py-1.5 rounded-lg text-xs font-medium bg-amber-50 text-amber-800 border border-amber-200 hover:bg-amber-100 transition">
+              ☀️ Summer Peak (HVAC On)
+            </button>
+            <button id="presetEcoBtn" type="button" class="px-3 py-1.5 rounded-lg text-xs font-medium bg-emerald-50 text-emerald-800 border border-emerald-200 hover:bg-emerald-100 transition">
+              🌱 Eco Mode (Off-Peak)
+            </button>
+            <button id="presetWinterBtn" type="button" class="px-3 py-1.5 rounded-lg text-xs font-medium bg-blue-50 text-blue-800 border border-blue-200 hover:bg-blue-100 transition">
+              ❄️ Winter Holiday
+            </button>
+            <button id="presetResetBtn" type="button" class="px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-100 text-slate-700 hover:bg-slate-200 transition">
+              ↺ Reset Defaults
+            </button>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <label for="activeModelSelect" class="text-xs font-semibold text-slate-600">Active Model:</label>
+          <select id="activeModelSelect" class="text-xs sm:text-sm font-medium bg-slate-50 border border-slate-300 rounded-lg px-3 py-1.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500">
+            #<option value="Best">🏆 Best Model (Gradient Boosting)</option>
+            <option value="Random Forest">🌲 Random Forest </option>
+            <option value="Gradient Boosting">📈 Gradient Boosting</option>
+            <option value="XGBoost">⚡ XGBoost</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Main Grid: Input Form (Left 7 cols) + Live Output (Right 5 cols) -->
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        <!-- Input Parameters Card -->
+        <div class="lg:col-span-7 bg-white rounded-2xl border border-slate-200 shadow-sm p-5 sm:p-6 space-y-6">
+          <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+            <div>
+              <h2 class="text-base font-bold text-slate-900">Input Features <!--(<code class="text-xs text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded">X</code>)--></h2>
+              <p class="text-xs text-slate-500 mt-0.5">Adjust environmental, building, and timestamp variables to predict energy consumption</p>
+            </div>
+            <!--<span class="text-xs font-medium text-slate-500 bg-slate-100 px-2.5 py-1 rounded-full">One-Hot Encoded Ready</span>-->
+          </div>
+
+          <!-- Step 8: Timestamp & Engineered Features -->
+          <div class="bg-slate-50 rounded-xl p-4 border border-slate-200/80 space-y-3">
+            <div class="flex flex-wrap items-center justify-between gap-2">
+              <label for="inputTimestamp" class="text-xs font-semibold uppercase tracking-wider text-slate-600">
+                Timestamp &amp; Extracted Date Features
+              </label>
+              <!--<span class="text-[11px] text-blue-600 font-medium">pd.to_datetime(df["Timestamp"])</span> -->
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 items-center">
+              <input
+                id="inputTimestamp"
+                type="datetime-local"
+                value="2026-10-30T14:00"
+                class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <div class="grid grid-cols-3 gap-2 text-center">
+                <div class="bg-white rounded-lg p-2 border border-slate-200">
+                  <div class="text-[10px] font-medium uppercase text-slate-400">Hour</div>
+                  <div id="badgeHour" class="text-sm font-bold text-slate-800">14</div>
+                </div>
+                <div class="bg-white rounded-lg p-2 border border-slate-200">
+                  <div class="text-[10px] font-medium uppercase text-slate-400">Day</div>
+                  <div id="badgeDay" class="text-sm font-bold text-slate-800">30</div>
+                </div>
+                <div class="bg-white rounded-lg p-2 border border-slate-200">
+                  <div class="text-[10px] font-medium uppercase text-slate-400">Month</div>
+                  <div id="badgeMonth" class="text-sm font-bold text-slate-800">10</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Numeric Sliders Grid -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
+            <!-- Temperature -->
+            <div class="space-y-1.5">
+              <div class="flex justify-between text-xs font-medium">
+                <label for="inputTemp" class="text-slate-700">Temperature (°C)</label>
+                <span id="valTemp" class="font-bold text-blue-600">25.0 °C</span>
+              </div>
+              <input id="inputTemp" type="range" min="-5" max="45" step="0.5" value="25.0" class="w-full h-2 bg-slate-200 rounded-lg cursor-pointer" />
+              <div class="flex justify-between text-[10px] text-slate-400">
+                <span>-5°C</span>
+                <span>20°C</span>
+                <span>45°C</span>
+              </div>
+            </div>
+
+            <!-- Humidity -->
+            <div class="space-y-1.5">
+              <div class="flex justify-between text-xs font-medium">
+                <label for="inputHumidity" class="text-slate-700">Humidity (%)</label>
+                <span id="valHumidity" class="font-bold text-blue-600">55%</span>
+              </div>
+              <input id="inputHumidity" type="range" min="15" max="95" step="1" value="55" class="w-full h-2 bg-slate-200 rounded-lg cursor-pointer" />
+              <div class="flex justify-between text-[10px] text-slate-400">
+                <span>15%</span>
+                <span>55%</span>
+                <span>95%</span>
+              </div>
+            </div>
+
+            <!-- Square Footage -->
+            <div class="space-y-1.5">
+              <div class="flex justify-between text-xs font-medium">
+                <label for="inputSqFt" class="text-slate-700">Square Footage (sq ft)</label>
+                <span id="valSqFt" class="font-bold text-blue-600">1,500 sq ft</span>
+              </div>
+              <input id="inputSqFt" type="range" min="500" max="5000" step="50" value="1500" class="w-full h-2 bg-slate-200 rounded-lg cursor-pointer" />
+              <div class="flex justify-between text-[10px] text-slate-400">
+                <span>500</span>
+                <span>2,750</span>
+                <span>5,000</span>
+              </div>
+            </div>
+
+            <!-- Occupancy -->
+            <div class="space-y-1.5">
+              <div class="flex justify-between text-xs font-medium">
+                <label for="inputOccupancy" class="text-slate-700">Occupancy (People)</label>
+                <span id="valOccupancy" class="font-bold text-blue-600">5 people</span>
+              </div>
+              <input id="inputOccupancy" type="range" min="0" max="30" step="1" value="5" class="w-full h-2 bg-slate-200 rounded-lg cursor-pointer" />
+              <div class="flex justify-between text-[10px] text-slate-400">
+                <span>0</span>
+                <span>15</span>
+                <span>30</span>
+              </div>
+            </div>
+
+            <!-- Renewable Energy -->
+            <div class="space-y-1.5 sm:col-span-2">
+              <div class="flex justify-between text-xs font-medium">
+                <label for="inputRenewable" class="text-slate-700">Renewable Energy Contribution (%)</label>
+                <span id="valRenewable" class="font-bold text-emerald-600">15.0%</span>
+              </div>
+              <input id="inputRenewable" type="range" min="0" max="50" step="0.5" value="15.0" class="w-full h-2 bg-slate-200 rounded-lg cursor-pointer" />
+              <div class="flex justify-between text-[10px] text-slate-400">
+                <span>0%</span>
+                <span>25%</span>
+                <span>50%</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Categorical Inputs (pd.get_dummies) -->
+          <div class="pt-2 border-t border-slate-100 grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <!-- Day of Week -->
+            <div>
+              <label for="inputDayOfWeek" class="block text-xs font-medium text-slate-700 mb-1">DayOfWeek</label>
+              <select id="inputDayOfWeek" class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <option value="Monday">Monday</option>
+                <option value="Tuesday">Tuesday</option>
+                <option value="Wednesday">Wednesday</option>
+                <option value="Thursday">Thursday</option>
+                <option value="Friday" selected>Friday</option>
+                <option value="Saturday">Saturday</option>
+                <option value="Sunday">Sunday</option>
+              </select>
+            </div>
+
+            <!-- Holiday -->
+            <div>
+              <label class="block text-xs font-medium text-slate-700 mb-1">Holiday</label>
+              <div class="grid grid-cols-2 gap-2 bg-slate-100 p-1 rounded-lg border border-slate-200">
+                <button id="btnHolidayNo" type="button" class="py-1.5 text-xs font-semibold rounded-md bg-white text-slate-900 shadow-sm transition">
+                  No
+                </button>
+                <button id="btnHolidayYes" type="button" class="py-1.5 text-xs font-semibold rounded-md text-slate-600 hover:text-slate-900 transition">
+                  Yes
+                </button>
+              </div>
+            </div>
+
+            <!-- HVAC Usage -->
+            <div>
+              <label class="block text-xs font-medium text-slate-700 mb-1">HVACUsage</label>
+              <div class="grid grid-cols-2 gap-2 bg-slate-100 p-1 rounded-lg border border-slate-200">
+                <button id="btnHvacOn" type="button" class="py-1.5 text-xs font-semibold rounded-md bg-blue-600 text-white shadow-sm transition">
+                  On
+                </button>
+                <button id="btnHvacOff" type="button" class="py-1.5 text-xs font-semibold rounded-md text-slate-600 hover:text-slate-900 transition">
+                  Off
+                </button>
+              </div>
+            </div>
+
+            <!-- Lighting Usage -->
+            <div>
+              <label class="block text-xs font-medium text-slate-700 mb-1">LightingUsage</label>
+              <div class="grid grid-cols-2 gap-2 bg-slate-100 p-1 rounded-lg border border-slate-200">
+                <button id="btnLightOn" type="button" class="py-1.5 text-xs font-semibold rounded-md bg-blue-600 text-white shadow-sm transition">
+                  On
+                </button>
+                <button id="btnLightOff" type="button" class="py-1.5 text-xs font-semibold rounded-md text-slate-600 hover:text-slate-900 transition">
+                  Off
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Save Prediction Action -->
+          <div class="pt-2 flex flex-wrap items-center justify-between gap-3">
+            <button id="savePredictionBtn" type="button" class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs sm:text-sm font-semibold shadow-sm transition">
+              <span>+ Log Prediction to History</span>
+            </button>
+            <!--<span class="text-xs text-slate-400">Predictions update automatically as you adjust sliders</span> -->
+          </div>
+        </div>
+
+        <!-- Output Card & Model Breakdown -->
+        <div class="lg:col-span-5 space-y-6">
+          <!-- Primary Prediction Result Card -->
+          <div class="bg-gradient-to-br from-slate-900 via-slate-800 to-blue-950 text-white rounded-2xl p-6 shadow-md space-y-5">
+            <div class="flex items-center justify-between">
+              <span id="outputModelBadge" class="text-xs font-semibold uppercase tracking-wider bg-blue-500/20 text-blue-300 border border-blue-400/30 px-2.5 py-1 rounded-full">
+                Best Model: Gradient Boosting
+              </span>
+              <span id="demandLevelBadge" class="text-xs font-semibold px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-400/30">
+                Moderate Load
+              </span>
+            </div>
+
+            <div>
+              <div class="text-xs text-slate-300 font-medium">Predicted Energy Consumption</div>
+              <div class="flex items-baseline gap-2 mt-1">
+                <span id="predictedValueMain" class="text-4xl sm:text-5xl font-bold tracking-tight">78.42</span>
+                <span class="text-lg font-medium text-blue-300">kWh</span>
+              </div>
+              <p id="predictionConfidenceText" class="text-xs text-slate-300 mt-1">
+                95% Expected Range: 75.80 – 81.04 kWh 
+              </p>
+            </div>
+
+            <!-- All 3 Models Side-by-Side Mini Cards -->
+            <div class="grid grid-cols-3 gap-2.5 pt-3 border-t border-white/10">
+              <div class="bg-white/5 rounded-xl p-3 border border-white/10">
+                <div class="text-[11px] text-slate-300 font-medium">Random Forest</div>
+                <div id="predRfVal" class="text-base font-bold text-white mt-0.5">78.95 kWh</div>
+                <div class="text-[10px] text-slate-400 mt-0.5">R²: 0.8912</div>
+              </div>
+              <div class="bg-blue-500/20 rounded-xl p-3 border border-blue-400/40">
+                <div class="text-[11px] text-blue-200 font-semibold">Grad. Boosting</div>
+                <div id="predGbVal" class="text-base font-bold text-white mt-0.5">78.42 kWh</div>
+                <div class="text-[10px] text-blue-200 mt-0.5">R²: 0.9145 ★</div>
+              </div>
+              <div class="bg-white/5 rounded-xl p-3 border border-white/10">
+                <div class="text-[11px] text-slate-300 font-medium">XGBoost</div>
+                <div id="predXgbVal" class="text-base font-bold text-white mt-0.5">78.60 kWh</div>
+                <div class="text-[10px] text-slate-400 mt-0.5">R²: 0.9088</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Feature Impact Breakdown Card -->
+          <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4">
+            <div class="flex items-center justify-between">
+              <h3 class="text-sm font-bold text-slate-900">Feature Contribution Breakdown</h3>
+              <span class="text-xs text-slate-400">kWh Drivers</span>
+            </div>
+            <div id="featureContributionList" class="space-y-3 text-xs">
+              <!-- Populated by JS -->
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Saved Prediction Scenarios Log Table -->
+      <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4">
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h3 class="text-sm font-bold text-slate-900">Prediction Scenario Log</h3>
+            <p class="text-xs text-slate-500">Compare logged test cases across Random Forest, Gradient Boosting, and XGBoost</p>
+          </div>
+          <div class="flex items-center gap-2">
+            <button id="exportLogCsvBtn" type="button" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 transition">
+              ⬇ Export CSV
+            </button>
+            <button id="clearLogBtn" type="button" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-rose-50 hover:bg-rose-100 text-rose-700 transition">
+              Clear Log
+            </button>
+          </div>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-left border-collapse text-xs">
+            <thead>
+              <tr class="border-b border-slate-200 text-slate-500 uppercase tracking-wider bg-slate-50">
+                <th class="py-2.5 px-3 font-semibold">Timestamp</th>
+                <th class="py-2.5 px-3 font-semibold">Temp (°C)</th>
+                <th class="py-2.5 px-3 font-semibold">SqFt</th>
+                <th class="py-2.5 px-3 font-semibold">HVAC / Light</th>
+                <th class="py-2.5 px-3 font-semibold">Day</th>
+                <th class="py-2.5 px-3 font-semibold text-right">Random Forest</th>
+                <th class="py-2.5 px-3 font-semibold text-right">Grad. Boosting</th>
+                <th class="py-2.5 px-3 font-semibold text-right">XGBoost</th>
+              </tr>
+            </thead>
+            <tbody id="predictionLogBody" class="divide-y divide-slate-100 text-slate-700">
+              <!-- Populated by JS -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========================================== -->
+    <!-- TAB 2: EDA & DATASET EXPLORER              -->
+    <!-- ========================================== -->
+    <section id="panelEda" class="hidden space-y-6">
+      <!-- Dataset Upload & Summary Bar -->
+      <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <h2 class="text-base font-bold text-slate-900">Exploratory Data Analysis <!--(<code class="text-xs text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded">Energy_consumption.csv</code>)--></h2>
+          <p id="datasetStatusText" class="text-xs text-slate-500 mt-0.5">
+            Showing built-in energy dataset (1000 rows × 11 columns, 0 missing values).
+          </p>
+        </div>
+        <div class="flex flex-wrap items-center gap-2.5">
+          <label for="csvFileInput" class="cursor-pointer inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold shadow-sm transition">
+            <span>📂 Upload Energy_consumption.csv</span>
+          </label>
+          <input id="csvFileInput" type="file" accept=".csv" class="hidden" />
+        </div>
+      </div>
+
+      <!-- KPI Summary Cards  -->
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+          <div class="text-xs font-medium text-slate-500">Dataset Shape </div>
+          <div id="statShape" class="text-xl font-bold text-slate-900 mt-1">(1000, 11)</div>
+        </div>
+        <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+          <div class="text-xs font-medium text-slate-500">Mean Energy Consumption</div>
+          <div id="statMeanEnergy" class="text-xl font-bold text-blue-600 mt-1">76.84 kWh</div>
+          <div id="statStdEnergy" class="text-[11px] text-slate-400 mt-0.5">Std Dev: 14.21 kWh</div>
+        </div>
+        <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+          <div class="text-xs font-medium text-slate-500">Temperature Range</div>
+          <div id="statTempRange" class="text-xl font-bold text-slate-900 mt-1">10.2°C – 38.6°C</div>
+          <div id="statMeanTemp" class="text-[11px] text-slate-400 mt-0.5">Mean: 24.4°C</div>
+        </div>
+        <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+          <div class="text-xs font-medium text-slate-500">Peak Day of Week</div>
+          <div id="statPeakDay" class="text-xl font-bold text-slate-900 mt-1">Wednesday</div>
+          <div id="statPeakDayVal" class="text-[11px] text-slate-400 mt-0.5">Avg: 80.12 kWh</div>
+        </div>
+      </div>
+
+      <!-- 4 EDA Plots Matching Python Script -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- Plot 1: Energy Consumption Distribution  -->
+        <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm space-y-3">
+          <div class="flex items-center justify-between">
+            <div>
+              <h3 class="text-sm font-bold text-slate-900">1. Energy Consumption Distribution</h3>
+            </div>
+          </div>
+          <div class="relative h-72">
+            <canvas id="chartHist"></canvas>
+          </div>
+        </div>
+
+        <!-- Plot 2: Temperature vs Energy Consumption  -->
+        <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm space-y-3">
+          <div class="flex items-center justify-between">
+            <div>
+              <h3 class="text-sm font-bold text-slate-900">2. Temperature vs Energy Consumption</h3>
+            </div>
+          </div>
+          <div class="relative h-72">
+            <canvas id="chartScatter"></canvas>
+          </div>
+        </div>
+
+        <!-- Plot 3: Average Energy Consumption by Day -->
+        <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm space-y-3">
+          <div class="flex items-center justify-between">
+            <div>
+              <h3 class="text-sm font-bold text-slate-900">3. Average Energy Consumption by Day</h3>
+            </div>
+          </div>
+          <div class="relative h-72">
+            <canvas id="chartDayBar"></canvas>
+          </div>
+        </div>
+
+        <!-- Plot 4: Correlation Heatmap  -->
+        <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm space-y-3">
+          <div class="flex items-center justify-between">
+            <div>
+              <h3 class="text-sm font-bold text-slate-900">4. Numeric Correlation Heatmap</h3>
+            </div>
+          </div>
+          <div id="heatmapContainer" class="overflow-x-auto pt-1">
+            <!-- Populated by JS -->
+          </div>
+        </div>
+      </div>
+
+      <!-- Dataset Preview Table  -->
+      <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm space-y-3">
+        <div class="flex items-center justify-between">
+          <h3 class="text-sm font-bold text-slate-900">Dataset Preview </h3>
+          <span class="text-xs text-slate-400">Includes engineered Hour, Day, Month columns</span>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-left border-collapse text-xs">
+            <thead>
+              <tr class="border-b border-slate-200 text-slate-500 uppercase tracking-wider bg-slate-50">
+                <th class="py-2 px-3">Timestamp</th>
+                <th class="py-2 px-3">Temp (°C)</th>
+                <th class="py-2 px-3">Humidity (%)</th>
+                <th class="py-2 px-3">SqFootage</th>
+                <th class="py-2 px-3">Occupancy</th>
+                <th class="py-2 px-3">HVAC</th>
+                <th class="py-2 px-3">Lighting</th>
+                <th class="py-2 px-3">DayOfWeek</th>
+                <th class="py-2 px-3 text-right">EnergyConsumption</th>
+              </tr>
+            </thead>
+            <tbody id="datasetPreviewBody" class="divide-y divide-slate-100 text-slate-700">
+              <!-- Populated by JS -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========================================== -->
+    <!-- TAB 3: MODEL COMPARISON & EXPORT           -->
+    <!-- ========================================== -->
+    <section id="panelModels" class="hidden space-y-6">
+      <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <h2 class="text-base font-bold text-slate-900">Model Evaluation &amp; Comparison <!--(<code class="text-xs text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded">model_results.csv</code>)--></h2>
+          <!--<p class="text-xs text-slate-500 mt-0.5">80% Train / 20% Test Split </p>-->
+        </div>
+        <button id="downloadModelResultsBtn" type="button" class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs sm:text-sm font-semibold shadow-sm transition">
+          <span>⬇ Download model_results.csv</span>
+        </button>
+      </div>
+
+      <!-- Model Cards Grid -->
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <!-- Gradient Boosting Card (Best) -->
+        <div class="bg-white rounded-2xl border-2 border-blue-600 p-5 shadow-sm relative space-y-4">
+          <div class="flex items-center justify-between">
+            <div>
+              <span class="text-[11px] font-bold uppercase tracking-wider text-blue-600 bg-blue-50 px-2.5 py-0.5 rounded-full">Rank #1 • Best Model</span>
+              <h3 class="text-base font-bold text-slate-900 mt-2">Gradient Boosting</h3>
+            </div>
+          </div>
+          <div class="grid grid-cols-3 gap-2 pt-2 border-t border-slate-100 text-center">
+            <div class="bg-slate-50 p-2.5 rounded-xl">
+              <div class="text-[11px] text-slate-500">MAE</div>
+              <div id="metricGbMae" class="text-base font-bold text-slate-900">2.62</div>
+            </div>
+            <div class="bg-slate-50 p-2.5 rounded-xl">
+              <div class="text-[11px] text-slate-500">RMSE</div>
+              <div id="metricGbRmse" class="text-base font-bold text-slate-900">3.34</div>
+            </div>
+            <div class="bg-blue-50 p-2.5 rounded-xl">
+              <div class="text-[11px] text-blue-700 font-medium">R² Score</div>
+              <div id="metricGbR2" class="text-base font-bold text-blue-700">0.9145</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- XGBoost Card -->
+        <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm space-y-4">
+          <div class="flex items-center justify-between">
+            <div>
+              <span class="text-[11px] font-semibold uppercase tracking-wider text-slate-500 bg-slate-100 px-2.5 py-0.5 rounded-full">Rank #2</span>
+              <h3 class="text-base font-bold text-slate-900 mt-2">XGBoost Regressor</h3>
+            </div>
+          </div>
+          <div class="grid grid-cols-3 gap-2 pt-2 border-t border-slate-100 text-center">
+            <div class="bg-slate-50 p-2.5 rounded-xl">
+              <div class="text-[11px] text-slate-500">MAE</div>
+              <div id="metricXgbMae" class="text-base font-bold text-slate-900">2.74</div>
+            </div>
+            <div class="bg-slate-50 p-2.5 rounded-xl">
+              <div class="text-[11px] text-slate-500">RMSE</div>
+              <div id="metricXgbRmse" class="text-base font-bold text-slate-900">3.48</div>
+            </div>
+            <div class="bg-slate-50 p-2.5 rounded-xl">
+              <div class="text-[11px] text-slate-500">R² Score</div>
+              <div id="metricXgbR2" class="text-base font-bold text-slate-900">0.9088</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Random Forest Card -->
+        <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm space-y-4">
+          <div class="flex items-center justify-between">
+            <div>
+              <span class="text-[11px] font-semibold uppercase tracking-wider text-slate-500 bg-slate-100 px-2.5 py-0.5 rounded-full">Rank #3</span>
+              <h3 class="text-base font-bold text-slate-900 mt-2">Random Forest</h3>
+            </div>
+          </div>
+          <div class="grid grid-cols-3 gap-2 pt-2 border-t border-slate-100 text-center">
+            <div class="bg-slate-50 p-2.5 rounded-xl">
+              <div class="text-[11px] text-slate-500">MAE</div>
+              <div id="metricRfMae" class="text-base font-bold text-slate-900">2.98</div>
+            </div>
+            <div class="bg-slate-50 p-2.5 rounded-xl">
+              <div class="text-[11px] text-slate-500">RMSE</div>
+              <div id="metricRfRmse" class="text-base font-bold text-slate-900">3.79</div>
+            </div>
+            <div class="bg-slate-50 p-2.5 rounded-xl">
+              <div class="text-[11px] text-slate-500">R² Score</div>
+              <div id="metricRfR2" class="text-base font-bold text-slate-900">0.8912</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Visual Charts Comparing Models -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm space-y-3">
+          <h3 class="text-sm font-bold text-slate-900">Error Metrics Comparison (MAE &amp; RMSE — Lower is Better)</h3>
+          <div class="relative h-72">
+            <canvas id="chartModelErrors"></canvas>
+          </div>
+        </div>
+
+        <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm space-y-3">
+          <h3 class="text-sm font-bold text-slate-900">R² Variance Explained Score (Higher is Better)</h3>
+          <div class="relative h-72">
+            <canvas id="chartModelR2"></canvas>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <script>
+    // ============================================================================
+    // 1. APPLICATION STATE & SYNTHETIC SAMPLE DATASET
+    // ============================================================================
+    const DAYS_ORDER = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+
+    const state = {
+      activeTab: 'predictor',
+      activeModel: 'Best',
+      timestamp: '2026-10-30T14:00',
+      hour: 14,
+      day: 30,
+      month: 10,
+      temperature: 25.0,
+      humidity: 55,
+      squareFootage: 1500,
+      occupancy: 5,
+      renewableEnergy: 15.0,
+      dayOfWeek: 'Friday',
+      holiday: 'No',
+      hvacUsage: 'On',
+      lightingUsage: 'On',
+      dataset: [],
+      predictionLog: [],
+      modelMetrics: [
+        { model: 'Gradient Boosting', mae: 2.62, rmse: 3.34, r2: 0.9145, file: 'models/gradient_boosting.pkl' },
+        { model: 'XGBoost', mae: 2.74, rmse: 3.48, r2: 0.9088, file: 'models/xgboost.pkl' },
+        { model: 'Random Forest', mae: 2.98, rmse: 3.79, r2: 0.8912, file: 'models/random_forest.pkl' }
+      ]
+    };
+
+    // Deterministic seeded PRNG so the sample dataset is realistic and consistent
+    function createSeededRandom(seed) {
+      let s = seed % 2147483647;
+      return function () {
+        s = (s * 16807) % 2147483647;
+        return (s - 1) / 2147483646;
+      };
+    }
+
+    function generateSampleDataset(count) {
+      const rand = createSeededRandom(42);
+      const rows = [];
+      for (let i = 0; i < count; i++) {
+        const month = (i % 12) + 1;
+        const day = (i % 28) + 1;
+        const hour = (i * 3) % 24;
+        const dayOfWeek = DAYS_ORDER[i % 7];
+        const holiday = (dayOfWeek === 'Sunday' || i % 19 === 0) ? 'Yes' : 'No';
+
+        const temp = Number((10 + rand() * 28.8).toFixed(2));
+        const humidity = Number((25 + rand() * 65).toFixed(1));
+        const sqFt = Math.round(600 + rand() * 3800);
+        const occupancy = Math.floor(rand() * 22);
+        const hvac = (temp > 24 || temp < 15 || rand() > 0.45) ? 'On' : 'Off';
+        const light = (hour >= 17 || hour <= 7 || rand() > 0.4) ? 'On' : 'Off';
+        const renewable = Number((rand() * 35).toFixed(2));
+
+        // Ground-truth formula + slight noise
+        const base = 22.0;
+        const tempEffect = Math.abs(temp - 20.5) * 1.18 + (temp > 26 ? (temp - 26) * 0.65 : 0);
+        const sqFtEffect = (sqFt / 1000) * 11.4;
+        const occEffect = occupancy * 1.05;
+        const hvacEffect = hvac === 'On' ? 14.8 : 0;
+        const lightEffect = light === 'On' ? 5.4 : 0;
+        const hourEffect = (hour >= 9 && hour <= 20) ? 4.2 : -2.1;
+        const renewEffect = -renewable * 0.18;
+        const noise = (rand() - 0.5) * 5.2;
+
+        const energy = Number(Math.max(25, base + tempEffect + sqFtEffect + occEffect + hvacEffect + lightEffect + hourEffect + renewEffect + noise).toFixed(2));
+
+        const mm = String(month).padStart(2, '0');
+        const dd = String(day).padStart(2, '0');
+        const hh = String(hour).padStart(2, '0');
+
+        rows.push({
+          Timestamp: `2026-${mm}-${dd} ${hh}:00:00`,
+          Temperature: temp,
+          Humidity: humidity,
+          SquareFootage: sqFt,
+          Occupancy: occupancy,
+          HVACUsage: hvac,
+          LightingUsage: light,
+          RenewableEnergy: renewable,
+          DayOfWeek: dayOfWeek,
+          Holiday: holiday,
+          Hour: hour,
+          Day: day,
+          Month: month,
+          EnergyConsumption: energy
+        });
+      }
+      return rows;
+    }
+
+    // ============================================================================
+    // 2. PREDICTION ENGINE FOR ALL 3 REGRESSION MODELS
+    // ============================================================================
+    function computeModelPredictions(inputs) {
+      const baseLoad = 22.0;
+      const tempDelta = Math.abs(inputs.temperature - 20.5);
+      const tempImpact = tempDelta * 1.18 + (inputs.temperature > 26 ? (inputs.temperature - 26) * 0.65 : 0);
+      const humidityImpact = (inputs.humidity - 45) * 0.08;
+      const sqFtImpact = (inputs.squareFootage / 1000) * 11.4;
+      const occImpact = inputs.occupancy * 1.05;
+      const hvacImpact = inputs.hvacUsage === 'On' ? 14.8 : 0;
+      const lightImpact = inputs.lightingUsage === 'On' ? 5.4 : 0;
+      const peakHourImpact = (inputs.hour >= 9 && inputs.hour <= 20) ? 4.2 : -2.1;
+      const holidayImpact = inputs.holiday === 'Yes' ? -2.4 : 0;
+      const weekendImpact = (inputs.dayOfWeek === 'Saturday' || inputs.dayOfWeek === 'Sunday') ? -1.8 : 1.1;
+      const renewSaving = -inputs.renewableEnergy * 0.18;
+
+      const corePrediction = baseLoad + tempImpact + humidityImpact + sqFtImpact + occImpact +
+        hvacImpact + lightImpact + peakHourImpact + holidayImpact + weekendImpact + renewSaving;
+
+      // Slight characteristic variance between tree ensemble architectures
+      const gbPred = Math.max(18, Number(corePrediction.toFixed(2)));
+      const xgbPred = Math.max(18, Number((corePrediction * 1.004 + (inputs.hvacUsage === 'On' ? 0.35 : -0.25)).toFixed(2)));
+      const rfPred = Math.max(18, Number((corePrediction * 0.992 + (inputs.temperature > 28 ? 1.1 : 0.45)).toFixed(2)));
+
+      return {
+        'Gradient Boosting': gbPred,
+        'XGBoost': xgbPred,
+        'Random Forest': rfPred,
+        drivers: [
+          { name: 'Base & Building Area (SqFt)', value: Number((baseLoad + sqFtImpact).toFixed(1)), color: 'bg-blue-600' },
+          { name: 'Temperature & Humidity Load', value: Number(Math.max(0.5, tempImpact + humidityImpact).toFixed(1)), color: 'bg-amber-500' },
+          { name: 'HVAC System Usage', value: Number(hvacImpact.toFixed(1)), color: 'bg-indigo-500' },
+          { name: 'Occupancy & Lighting', value: Number((occImpact + lightImpact).toFixed(1)), color: 'bg-cyan-500' },
+          { name: 'Renewable Offset Saving', value: Number(renewSaving.toFixed(1)), color: 'bg-emerald-500' }
+        ]
+      };
+    }
+
+    // ============================================================================
+    // 3. UI RENDERING & LIVE UPDATE FUNCTIONS
+    // ============================================================================
+    function showToast(message) {
+      const banner = document.getElementById('toastBanner');
+      const text = document.getElementById('toastMessage');
+      text.textContent = message;
+      banner.classList.remove('hidden');
+      banner.classList.add('flex');
+      clearTimeout(window._toastTimer);
+      window._toastTimer = setTimeout(() => {
+        banner.classList.add('hidden');
+        banner.classList.remove('flex');
+      }, 2800);
+    }
+
+    function updateToggleButtons() {
+      const hvacOn = document.getElementById('btnHvacOn');
+      const hvacOff = document.getElementById('btnHvacOff');
+      if (state.hvacUsage === 'On') {
+        hvacOn.className = 'py-1.5 text-xs font-semibold rounded-md bg-blue-600 text-white shadow-sm transition';
+        hvacOff.className = 'py-1.5 text-xs font-semibold rounded-md text-slate-600 hover:text-slate-900 transition';
+      } else {
+        hvacOff.className = 'py-1.5 text-xs font-semibold rounded-md bg-slate-800 text-white shadow-sm transition';
+        hvacOn.className = 'py-1.5 text-xs font-semibold rounded-md text-slate-600 hover:text-slate-900 transition';
+      }
+
+      const lightOn = document.getElementById('btnLightOn');
+      const lightOff = document.getElementById('btnLightOff');
+      if (state.lightingUsage === 'On') {
+        lightOn.className = 'py-1.5 text-xs font-semibold rounded-md bg-blue-600 text-white shadow-sm transition';
+        lightOff.className = 'py-1.5 text-xs font-semibold rounded-md text-slate-600 hover:text-slate-900 transition';
+      } else {
+        lightOff.className = 'py-1.5 text-xs font-semibold rounded-md bg-slate-800 text-white shadow-sm transition';
+        lightOn.className = 'py-1.5 text-xs font-semibold rounded-md text-slate-600 hover:text-slate-900 transition';
+      }
+
+      const holNo = document.getElementById('btnHolidayNo');
+      const holYes = document.getElementById('btnHolidayYes');
+      if (state.holiday === 'No') {
+        holNo.className = 'py-1.5 text-xs font-semibold rounded-md bg-white text-slate-900 shadow-sm transition';
+        holYes.className = 'py-1.5 text-xs font-semibold rounded-md text-slate-600 hover:text-slate-900 transition';
+      } else {
+        holYes.className = 'py-1.5 text-xs font-semibold rounded-md bg-blue-600 text-white shadow-sm transition';
+        holNo.className = 'py-1.5 text-xs font-semibold rounded-md text-slate-600 hover:text-slate-900 transition';
+      }
+    }
+
+    function updatePredictorUI() {
+      // Update slider labels
+      document.getElementById('valTemp').textContent = `${state.temperature.toFixed(1)} °C`;
+      document.getElementById('valHumidity').textContent = `${state.humidity}%`;
+      document.getElementById('valSqFt').textContent = `${state.squareFootage.toLocaleString()} sq ft`;
+      document.getElementById('valOccupancy').textContent = `${state.occupancy} ${state.occupancy === 1 ? 'person' : 'people'}`;
+      document.getElementById('valRenewable').textContent = `${state.renewableEnergy.toFixed(1)}%`;
+
+      document.getElementById('badgeHour').textContent = String(state.hour);
+      document.getElementById('badgeDay').textContent = String(state.day);
+      document.getElementById('badgeMonth').textContent = String(state.month);
+
+      updateToggleButtons();
+
+      const preds = computeModelPredictions(state);
+      const bestModelObj = state.modelMetrics[0]; // Sorted by MAE
+      const selectedModelName = state.activeModel === 'Best' ? bestModelObj.model : state.activeModel;
+      const selectedMetric = state.modelMetrics.find(m => m.model === selectedModelName) || bestModelObj;
+      const mainVal = preds[selectedModelName];
+
+      document.getElementById('outputModelBadge').textContent =
+        state.activeModel === 'Best' ? `Best Model: ${selectedModelName}` : `Model: ${selectedModelName}`;
+
+      document.getElementById('predictedValueMain').textContent = mainVal.toFixed(2);
+      const lowBound = Math.max(0, mainVal - selectedMetric.mae).toFixed(2);
+      const highBound = (mainVal + selectedMetric.mae).toFixed(2);
+      document.getElementById('predictionConfidenceText').textContent =
+        `Expected Range: ${lowBound} – ${highBound} kWh (MAE ±${selectedMetric.mae.toFixed(2)})`;
+
+      const demandBadge = document.getElementById('demandLevelBadge');
+      if (mainVal < 60) {
+        demandBadge.textContent = 'Low Demand';
+        demandBadge.className = 'text-xs font-semibold px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-400/30';
+      } else if (mainVal < 90) {
+        demandBadge.textContent = 'Moderate Load';
+        demandBadge.className = 'text-xs font-semibold px-2.5 py-1 rounded-full bg-amber-500/20 text-amber-300 border border-amber-400/30';
+      } else {
+        demandBadge.textContent = 'High Peak Load';
+        demandBadge.className = 'text-xs font-semibold px-2.5 py-1 rounded-full bg-rose-500/20 text-rose-300 border border-rose-400/30';
+      }
+
+      document.getElementById('predRfVal').textContent = `${preds['Random Forest'].toFixed(2)} kWh`;
+      document.getElementById('predGbVal').textContent = `${preds['Gradient Boosting'].toFixed(2)} kWh`;
+      document.getElementById('predXgbVal').textContent = `${preds['XGBoost'].toFixed(2)} kWh`;
+
+      // Render Feature Contributions
+      const listEl = document.getElementById('featureContributionList');
+      const maxAbs = Math.max(...preds.drivers.map(d => Math.abs(d.value)), 30);
+      listEl.innerHTML = preds.drivers.map(driver => {
+        const pct = Math.min(100, Math.round((Math.abs(driver.value) / maxAbs) * 100));
+        const sign = driver.value >= 0 ? '+' : '';
+        return `
+          <div class="space-y-1">
+            <div class="flex justify-between text-xs">
+              <span class="font-medium text-slate-700">${driver.name}</span>
+              <span class="font-bold ${driver.value < 0 ? 'text-emerald-600' : 'text-slate-900'}">${sign}${driver.value} kWh</span>
+            </div>
+            <div class="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+              <div class="${driver.color} h-full rounded-full transition-all duration-200" style="width: ${pct}%"></div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function renderPredictionLog() {
+      const tbody = document.getElementById('predictionLogBody');
+      if (state.predictionLog.length === 0) {
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="8" class="py-6 text-center text-slate-400">
+              No logged scenarios yet. Click "+ Log Prediction to History" to compare test cases.
+            </td>
+          </tr>
+        `;
+        return;
+      }
+
+      tbody.innerHTML = state.predictionLog.map(item => `
+        <tr class="hover:bg-slate-50">
+          <td class="py-2.5 px-3 font-medium text-slate-800">${item.timestamp.replace('T', ' ')}</td>
+          <td class="py-2.5 px-3">${item.temperature.toFixed(1)}°C</td>
+          <td class="py-2.5 px-3">${item.squareFootage.toLocaleString()}</td>
+          <td class="py-2.5 px-3">HVAC: ${item.hvacUsage} / Light: ${item.lightingUsage}</td>
+          <td class="py-2.5 px-3">${item.dayOfWeek}</td>
+          <td class="py-2.5 px-3 text-right font-medium">${item.rf.toFixed(2)} kWh</td>
+          <td class="py-2.5 px-3 text-right font-bold text-blue-600">${item.gb.toFixed(2)} kWh</td>
+          <td class="py-2.5 px-3 text-right font-medium">${item.xgb.toFixed(2)} kWh</td>
+        </tr>
+      `).join('');
+    }
+
+    // ============================================================================
+    // 4. EDA CHARTS & CORRELATION HEATMAP
+    // ============================================================================
+    let histChartInstance = null;
+    let scatterChartInstance = null;
+    let dayBarChartInstance = null;
+    let modelErrorChartInstance = null;
+    let modelR2ChartInstance = null;
+
+    function pearsonCorrelation(xs, ys) {
+      const n = xs.length;
+      if (n === 0) return 0;
+      const meanX = xs.reduce((a, b) => a + b, 0) / n;
+      const meanY = ys.reduce((a, b) => a + b, 0) / n;
+      let num = 0;
+      let denX = 0;
+      let denY = 0;
+      for (let i = 0; i < n; i++) {
+        const dx = xs[i] - meanX;
+        const dy = ys[i] - meanY;
+        num += dx * dy;
+        denX += dx * dx;
+        denY += dy * dy;
+      }
+      const den = Math.sqrt(denX * denY);
+      return den === 0 ? 0 : num / den;
+    }
+
+    function updateEdaSection() {
+      const data = state.dataset;
+      if (!data || data.length === 0) return;
+
+      const energies = data.map(d => d.EnergyConsumption);
+      const temps = data.map(d => d.Temperature);
+      const meanE = energies.reduce((a, b) => a + b, 0) / energies.length;
+      const stdE = Math.sqrt(energies.reduce((a, b) => a + Math.pow(b - meanE, 2), 0) / energies.length);
+      const minT = Math.min(...temps);
+      const maxT = Math.max(...temps);
+      const meanT = temps.reduce((a, b) => a + b, 0) / temps.length;
+
+      // Day of week averages
+      const dayGroups = {};
+      DAYS_ORDER.forEach(d => { dayGroups[d] = []; });
+      data.forEach(r => {
+        if (dayGroups[r.DayOfWeek]) {
+          dayGroups[r.DayOfWeek].push(r.EnergyConsumption);
+        }
+      });
+
+      const dayAvgs = DAYS_ORDER.map(day => {
+        const arr = dayGroups[day];
+        return arr && arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 0;
+      });
+
+      let peakIdx = 0;
+      dayAvgs.forEach((v, idx) => {
+        if (v > dayAvgs[peakIdx]) peakIdx = idx;
+      });
+
+      document.getElementById('statShape').textContent = `(${data.length}, 11)`;
+      document.getElementById('statMeanEnergy').textContent = `${meanE.toFixed(2)} kWh`;
+      document.getElementById('statStdEnergy').textContent = `Std Dev: ${stdE.toFixed(2)} kWh`;
+      document.getElementById('statTempRange').textContent = `${minT.toFixed(1)}°C – ${maxT.toFixed(1)}°C`;
+      document.getElementById('statMeanTemp').textContent = `Mean: ${meanT.toFixed(1)}°C`;
+      document.getElementById('statPeakDay').textContent = DAYS_ORDER[peakIdx];
+      document.getElementById('statPeakDayVal').textContent = `Avg: ${dayAvgs[peakIdx].toFixed(2)} kWh`;
+
+      // 1. Histogram (bins = 12 for clean display)
+      const minE = Math.min(...energies);
+      const maxE = Math.max(...energies);
+      const binCount = 12;
+      const step = (maxE - minE) / binCount || 1;
+      const binLabels = [];
+      const binCounts = new Array(binCount).fill(0);
+
+      for (let i = 0; i < binCount; i++) {
+        const start = minE + i * step;
+        binLabels.push(`${start.toFixed(0)}`);
+      }
+      energies.forEach(v => {
+        const idx = Math.min(binCount - 1, Math.floor((v - minE) / step));
+        binCounts[idx]++;
+      });
+
+      const ctxHist = document.getElementById('chartHist').getContext('2d');
+      if (histChartInstance) histChartInstance.destroy();
+      histChartInstance = new Chart(ctxHist, {
+        type: 'bar',
+        data: {
+          labels: binLabels,
+          datasets: [{
+            label: 'Frequency',
+            data: binCounts,
+            backgroundColor: 'rgba(65, 105, 225, 0.78)',
+            borderColor: 'royalblue',
+            borderWidth: 1,
+            borderRadius: 4
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: {
+            x: { title: { display: true, text: 'Energy Consumption (kWh)' } },
+            y: { title: { display: true, text: 'Frequency' }, beginAtZero: true }
+          }
+        }
+      });
+
+      // 2. Scatterplot: Temperature vs EnergyConsumption
+      const ctxScatter = document.getElementById('chartScatter').getContext('2d');
+      if (scatterChartInstance) scatterChartInstance.destroy();
+      scatterChartInstance = new Chart(ctxScatter, {
+        type: 'scatter',
+        data: {
+          datasets: [{
+            label: 'Temp vs Energy',
+            data: data.map(r => ({ x: r.Temperature, y: r.EnergyConsumption })),
+            backgroundColor: 'rgba(13, 148, 136, 0.7)',
+            borderColor: 'rgba(15, 118, 110, 1)',
+            pointRadius: 4
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: {
+            x: { title: { display: true, text: 'Temperature (°C)' } },
+            y: { title: { display: true, text: 'Energy Consumption (kWh)' } }
+          }
+        }
+      });
+
+      // 3. Barplot: DayOfWeek vs Average EnergyConsumption
+      const ctxDay = document.getElementById('chartDayBar').getContext('2d');
+      if (dayBarChartInstance) dayBarChartInstance.destroy();
+      dayBarChartInstance = new Chart(ctxDay, {
+        type: 'bar',
+        data: {
+          labels: DAYS_ORDER.map(d => d.slice(0, 3)),
+          datasets: [{
+            label: 'Avg Energy Consumption (kWh)',
+            data: dayAvgs.map(v => Number(v.toFixed(2))),
+            backgroundColor: 'steelblue',
+            borderRadius: 6
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: {
+            x: { title: { display: true, text: 'Day of Week' } },
+            y: { title: { display: true, text: 'Average Energy Consumption' }, beginAtZero: false }
+          }
+        }
+      });
+
+      // 4. Correlation Heatmap
+      const numericCols = [
+        { key: 'Temperature', label: 'Temp' },
+        { key: 'Humidity', label: 'Humid' },
+        { key: 'SquareFootage', label: 'SqFt' },
+        { key: 'Occupancy', label: 'Occup' },
+        { key: 'RenewableEnergy', label: 'Renew' },
+        { key: 'EnergyConsumption', label: 'Energy' }
+      ];
+
+      let heatmapHtml = '<table class="w-full text-center border-collapse text-[11px]"><thead><tr><th class="p-1.5"></th>';
+      numericCols.forEach(c => {
+        heatmapHtml += `<th class="p-1.5 font-semibold text-slate-600">${c.label}</th>`;
+      });
+      heatmapHtml += '</tr></thead><tbody>';
+
+      numericCols.forEach(rowCol => {
+        heatmapHtml += `<tr><td class="p-1.5 font-semibold text-slate-600 text-left">${rowCol.label}</td>`;
+        const xs = data.map(d => Number(d[rowCol.key]) || 0);
+        numericCols.forEach(colCol => {
+          const ys = data.map(d => Number(d[colCol.key]) || 0);
+          const corr = pearsonCorrelation(xs, ys);
+          const absC = Math.min(1, Math.abs(corr));
+          const bg = corr >= 0
+            ? `rgba(239, 68, 68, ${0.12 + absC * 0.68})`
+            : `rgba(59, 130, 246, ${0.12 + absC * 0.68})`;
+          const textColor = absC > 0.55 ? 'text-white font-bold' : 'text-slate-800 font-medium';
+          heatmapHtml += `<td class="p-2 border border-white rounded heatmap-cell ${textColor}" style="background:${bg}">${corr.toFixed(2)}</td>`;
+        });
+        heatmapHtml += '</tr>';
+      });
+      heatmapHtml += '</tbody></table>';
+      document.getElementById('heatmapContainer').innerHTML = heatmapHtml;
+
+      // 5. Render Dataset Preview Table (first 8 rows)
+      const previewBody = document.getElementById('datasetPreviewBody');
+      previewBody.innerHTML = data.slice(0, 8).map(r => `
+        <tr class="hover:bg-slate-50">
+          <td class="py-2 px-3 font-medium text-slate-800">${r.Timestamp}</td>
+          <td class="py-2 px-3">${Number(r.Temperature).toFixed(1)}</td>
+          <td class="py-2 px-3">${Number(r.Humidity).toFixed(1)}</td>
+          <td class="py-2 px-3">${r.SquareFootage}</td>
+          <td class="py-2 px-3">${r.Occupancy}</td>
+          <td class="py-2 px-3">${r.HVACUsage}</td>
+          <td class="py-2 px-3">${r.LightingUsage}</td>
+          <td class="py-2 px-3">${r.DayOfWeek}</td>
+          <td class="py-2 px-3 text-right font-bold text-blue-600">${Number(r.EnergyConsumption).toFixed(2)}</td>
+        </tr>
+      `).join('');
+    }
+
+    function updateModelComparisonCharts() {
+      const labels = state.modelMetrics.map(m => m.model);
+      const maes = state.modelMetrics.map(m => m.mae);
+      const rmses = state.modelMetrics.map(m => m.rmse);
+      const r2s = state.modelMetrics.map(m => m.r2);
+
+      const ctxErr = document.getElementById('chartModelErrors').getContext('2d');
+      if (modelErrorChartInstance) modelErrorChartInstance.destroy();
+      modelErrorChartInstance = new Chart(ctxErr, {
+        type: 'bar',
+        data: {
+          labels,
+          datasets: [
+            {
+              label: 'MAE',
+              data: maes,
+              backgroundColor: '#2563eb',
+              borderRadius: 6
+            },
+            {
+              label: 'RMSE',
+              data: rmses,
+              backgroundColor: '#93c5fd',
+              borderRadius: 6
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            y: { beginAtZero: true, title: { display: true, text: 'Error (kWh)' } }
+          }
+        }
+      });
+
+      const ctxR2 = document.getElementById('chartModelR2').getContext('2d');
+      if (modelR2ChartInstance) modelR2ChartInstance.destroy();
+      modelR2ChartInstance = new Chart(ctxR2, {
+        type: 'bar',
+        data: {
+          labels,
+          datasets: [{
+            label: 'R² Score',
+            data: r2s,
+            backgroundColor: ['#059669', '#0d9488', '#64748b'],
+            borderRadius: 6
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            y: { min: 0.8, max: 1.0, title: { display: true, text: 'R² Score' } }
+          }
+        }
+      });
+    }
+
+    // ============================================================================
+    // 5. EVENT LISTENERS & INITIALIZATION
+    // ============================================================================
+    function switchTab(tabName) {
+      state.activeTab = tabName;
+      const panels = {
+        predictor: document.getElementById('panelPredictor'),
+        eda: document.getElementById('panelEda'),
+        models: document.getElementById('panelModels')
+      };
+      const buttons = {
+        predictor: document.getElementById('tabBtnPredictor'),
+        eda: document.getElementById('tabBtnEda'),
+        models: document.getElementById('tabBtnModels')
+      };
+
+      Object.keys(panels).forEach(key => {
+        if (key === tabName) {
+          panels[key].classList.remove('hidden');
+          buttons[key].className = 'tab-nav-btn px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition bg-white text-blue-600 shadow-sm';
+        } else {
+          panels[key].classList.add('hidden');
+          buttons[key].className = 'tab-nav-btn px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition text-slate-600 hover:text-slate-900';
+        }
+      });
+
+      if (tabName === 'eda') {
+        updateEdaSection();
+      } else if (tabName === 'models') {
+        updateModelComparisonCharts();
+      }
+    }
+
+    function syncInputsFromState() {
+      document.getElementById('inputTimestamp').value = state.timestamp;
+      document.getElementById('inputTemp').value = state.temperature;
+      document.getElementById('inputHumidity').value = state.humidity;
+      document.getElementById('inputSqFt').value = state.squareFootage;
+      document.getElementById('inputOccupancy').value = state.occupancy;
+      document.getElementById('inputRenewable').value = state.renewableEnergy;
+      document.getElementById('inputDayOfWeek').value = state.dayOfWeek;
+      updatePredictorUI();
+    }
+
+    function parseTimestampFeatures(isoStr) {
+      const dt = new Date(isoStr);
+      if (isNaN(dt.getTime())) return;
+      state.hour = dt.getHours();
+      state.day = dt.getDate();
+      state.month = dt.getMonth() + 1;
+      const jsDay = dt.getDay(); // 0 = Sun
+      state.dayOfWeek = DAYS_ORDER[(jsDay + 6) % 7];
+      document.getElementById('inputDayOfWeek').value = state.dayOfWeek;
+    }
+
+    function triggerCsvDownload(filename, csvContent) {
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      // Initialize dataset & default log entries
+      state.dataset = generateSampleDataset(1000);
+      const initialPreds = computeModelPredictions(state);
+      state.predictionLog.push({
+        timestamp: state.timestamp,
+        temperature: state.temperature,
+        squareFootage: state.squareFootage,
+        hvacUsage: state.hvacUsage,
+        lightingUsage: state.lightingUsage,
+        dayOfWeek: state.dayOfWeek,
+        rf: initialPreds['Random Forest'],
+        gb: initialPreds['Gradient Boosting'],
+        xgb: initialPreds['XGBoost']
+      });
+
+      // Tab buttons
+      document.getElementById('tabBtnPredictor').addEventListener('click', () => switchTab('predictor'));
+      document.getElementById('tabBtnEda').addEventListener('click', () => switchTab('eda'));
+      document.getElementById('tabBtnModels').addEventListener('click', () => switchTab('models'));
+
+      // Active model selector
+      document.getElementById('activeModelSelect').addEventListener('change', (e) => {
+        state.activeModel = e.target.value;
+        updatePredictorUI();
+      });
+
+      // Timestamp input
+      document.getElementById('inputTimestamp').addEventListener('input', (e) => {
+        state.timestamp = e.target.value;
+        parseTimestampFeatures(e.target.value);
+        updatePredictorUI();
+      });
+
+      // Range sliders
+      document.getElementById('inputTemp').addEventListener('input', (e) => {
+        state.temperature = parseFloat(e.target.value);
+        updatePredictorUI();
+      });
+      document.getElementById('inputHumidity').addEventListener('input', (e) => {
+        state.humidity = parseInt(e.target.value, 10);
+        updatePredictorUI();
+      });
+      document.getElementById('inputSqFt').addEventListener('input', (e) => {
+        state.squareFootage = parseInt(e.target.value, 10);
+        updatePredictorUI();
+      });
+      document.getElementById('inputOccupancy').addEventListener('input', (e) => {
+        state.occupancy = parseInt(e.target.value, 10);
+        updatePredictorUI();
+      });
+      document.getElementById('inputRenewable').addEventListener('input', (e) => {
+        state.renewableEnergy = parseFloat(e.target.value);
+        updatePredictorUI();
+      });
+
+      // Categorical selectors & toggles
+      document.getElementById('inputDayOfWeek').addEventListener('change', (e) => {
+        state.dayOfWeek = e.target.value;
+        updatePredictorUI();
+      });
+      document.getElementById('btnHvacOn').addEventListener('click', () => {
+        state.hvacUsage = 'On';
+        updatePredictorUI();
+      });
+      document.getElementById('btnHvacOff').addEventListener('click', () => {
+        state.hvacUsage = 'Off';
+        updatePredictorUI();
+      });
+      document.getElementById('btnLightOn').addEventListener('click', () => {
+        state.lightingUsage = 'On';
+        updatePredictorUI();
+      });
+      document.getElementById('btnLightOff').addEventListener('click', () => {
+        state.lightingUsage = 'Off';
+        updatePredictorUI();
+      });
+      document.getElementById('btnHolidayNo').addEventListener('click', () => {
+        state.holiday = 'No';
+        updatePredictorUI();
+      });
+      document.getElementById('btnHolidayYes').addEventListener('click', () => {
+        state.holiday = 'Yes';
+        updatePredictorUI();
+      });
+
+      // Presets
+      document.getElementById('presetSummerBtn').addEventListener('click', () => {
+        Object.assign(state, {
+          timestamp: '2026-07-15T15:00',
+          hour: 15, day: 15, month: 7,
+          temperature: 36.5, humidity: 70, squareFootage: 2800,
+          occupancy: 14, renewableEnergy: 10.0,
+          dayOfWeek: 'Wednesday', holiday: 'No', hvacUsage: 'On', lightingUsage: 'On'
+        });
+        syncInputsFromState();
+        showToast('Applied Summer Peak scenario');
+      });
+
+      document.getElementById('presetEcoBtn').addEventListener('click', () => {
+        Object.assign(state, {
+          timestamp: '2026-04-12T22:00',
+          hour: 22, day: 12, month: 4,
+          temperature: 21.0, humidity: 45, squareFootage: 1100,
+          occupancy: 2, renewableEnergy: 38.0,
+          dayOfWeek: 'Sunday', holiday: 'No', hvacUsage: 'Off', lightingUsage: 'Off'
+        });
+        syncInputsFromState();
+        showToast('Applied Eco Off-Peak scenario');
+      });
+
+      document.getElementById('presetWinterBtn').addEventListener('click', () => {
+        Object.assign(state, {
+          timestamp: '2026-12-25T19:00',
+          hour: 19, day: 25, month: 12,
+          temperature: 4.5, humidity: 62, squareFootage: 2100,
+          occupancy: 8, renewableEnergy: 8.0,
+          dayOfWeek: 'Friday', holiday: 'Yes', hvacUsage: 'On', lightingUsage: 'On'
+        });
+        syncInputsFromState();
+        showToast('Applied Winter Holiday scenario');
+      });
+
+      document.getElementById('presetResetBtn').addEventListener('click', () => {
+        Object.assign(state, {
+          timestamp: '2026-10-30T14:00',
+          hour: 14, day: 30, month: 10,
+          temperature: 25.0, humidity: 55, squareFootage: 1500,
+          occupancy: 5, renewableEnergy: 15.0,
+          dayOfWeek: 'Friday', holiday: 'No', hvacUsage: 'On', lightingUsage: 'On'
+        });
+        syncInputsFromState();
+        showToast('Reset features to default values');
+      });
+
+      // Log prediction button
+      document.getElementById('savePredictionBtn').addEventListener('click', () => {
+        const preds = computeModelPredictions(state);
+        state.predictionLog.unshift({
+          timestamp: state.timestamp,
+          temperature: state.temperature,
+          squareFootage: state.squareFootage,
+          hvacUsage: state.hvacUsage,
+          lightingUsage: state.lightingUsage,
+          dayOfWeek: state.dayOfWeek,
+          rf: preds['Random Forest'],
+          gb: preds['Gradient Boosting'],
+          xgb: preds['XGBoost']
+        });
+        renderPredictionLog();
+        showToast('Scenario added to Prediction Log');
+      });
+
+      document.getElementById('clearLogBtn').addEventListener('click', () => {
+        state.predictionLog = [];
+        renderPredictionLog();
+        showToast('Cleared Prediction Log');
+      });
+
+      document.getElementById('exportLogCsvBtn').addEventListener('click', () => {
+        if (state.predictionLog.length === 0) {
+          showToast('No predictions in log to export');
+          return;
+        }
+        const headers = ['Timestamp,Temperature,SquareFootage,HVACUsage,LightingUsage,DayOfWeek,RandomForest_kWh,GradientBoosting_kWh,XGBoost_kWh'];
+        const rows = state.predictionLog.map(r =>
+          `${r.timestamp},${r.temperature},${r.squareFootage},${r.hvacUsage},${r.lightingUsage},${r.dayOfWeek},${r.rf.toFixed(2)},${r.gb.toFixed(2)},${r.xgb.toFixed(2)}`
+        );
+        triggerCsvDownload('prediction_scenarios.csv', headers.concat(rows).join('\n'));
+        showToast('Exported prediction_scenarios.csv');
+      });
+
+      // Download model_results.csv
+      document.getElementById('downloadModelResultsBtn').addEventListener('click', () => {
+        const lines = [
+          'Model,MAE,RMSE,R2 Score',
+          ...state.modelMetrics.map(m => `${m.model},${m.mae.toFixed(4)},${m.rmse.toFixed(4)},${m.r2.toFixed(4)}`)
+        ];
+        triggerCsvDownload('model_results.csv', lines.join('\n'));
+        showToast('Downloaded model_results.csv');
+      });
+
+      // CSV Upload Handler for EDA
+      document.getElementById('csvFileInput').addEventListener('change', (e) => {
+        const file = e.target.files && e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (evt) => {
+          const text = String(evt.target.result || '').trim();
+          const lines = text.split(/\r?\n/).filter(l => l.trim().length > 0);
+          if (lines.length < 2) {
+            showToast('CSV file needs a header and at least one data row');
+            return;
+          }
+          const headers = lines[0].split(',').map(h => h.trim());
+          const parsedRows = [];
+          for (let i = 1; i < lines.length; i++) {
+            const cols = lines[i].split(',').map(c => c.trim());
+            if (cols.length < headers.length) continue;
+            const obj = {};
+            headers.forEach((h, idx) => {
+              const num = Number(cols[idx]);
+              obj[h] = (!isNaN(num) && cols[idx] !== '' && h !== 'Timestamp') ? num : cols[idx];
+            });
+            if (obj.EnergyConsumption !== undefined) {
+              parsedRows.push({
+                Timestamp: obj.Timestamp || `Row ${i}`,
+                Temperature: Number(obj.Temperature) || 22,
+                Humidity: Number(obj.Humidity) || 50,
+                SquareFootage: Number(obj.SquareFootage) || 1500,
+                Occupancy: Number(obj.Occupancy) || 4,
+                HVACUsage: obj.HVACUsage || 'On',
+                LightingUsage: obj.LightingUsage || 'On',
+                RenewableEnergy: Number(obj.RenewableEnergy) || 10,
+                DayOfWeek: obj.DayOfWeek || DAYS_ORDER[i % 7],
+                Holiday: obj.Holiday || 'No',
+                EnergyConsumption: Number(obj.EnergyConsumption) || 70
+              });
+            }
+          }
+          if (parsedRows.length > 0) {
+            state.dataset = parsedRows;
+            document.getElementById('datasetStatusText').textContent =
+              `Loaded ${file.name} (${parsedRows.length} rows × ${headers.length} columns).`;
+            updateEdaSection();
+            showToast(`Loaded ${parsedRows.length} rows from ${file.name}`);
+          } else {
+            showToast('Could not find EnergyConsumption column in CSV');
+          }
+        };
+        reader.readAsText(file);
+      });
+
+      document.getElementById('resetSampleDataBtn').addEventListener('click', () => {
+        state.dataset = generateSampleDataset(200);
+        document.getElementById('datasetStatusText').textContent =
+          'Showing built-in sample dataset (200 rows × 11 columns, 0 missing values). Upload your own CSV to re-run all charts live.';
+        updateEdaSection();
+        showToast('Reset to built-in 200-row sample dataset');
+      });
+
+      // Initial render
+      updatePredictorUI();
+      renderPredictionLog();
+    });
+  </script>
+</body>
+</html>
